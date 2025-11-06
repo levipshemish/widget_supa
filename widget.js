@@ -1,7 +1,6 @@
-(function() {
+(function () {
   'use strict';
 
-  // Configuration - users should set these before loading the widget
   const config = {
     supabaseUrl: window.WIDGET_SUPABASE_URL || '',
     supabaseKey: window.WIDGET_SUPABASE_KEY || '',
@@ -9,192 +8,193 @@
     containerId: window.WIDGET_CONTAINER_ID || 'jewgo-widget'
   };
 
-  // Basic styles
   const styles = `
     .jewgo-widget {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: var(--font, 'Inter', sans-serif);
       max-width: 400px;
       padding: 20px;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      background: #ffffff;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .jewgo-widget__banner {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .jewgo-widget__logo {
+      display: block;
+      margin: 0 auto 10px;
+      height: 50px;
+      object-fit: contain;
     }
     .jewgo-widget__title {
       font-size: 20px;
       font-weight: 600;
-      margin: 0 0 12px 0;
-      color: #333;
+      margin-bottom: 6px;
+      color: var(--primary-color, #0070f3);
+      text-align: center;
     }
-    .jewgo-widget__progress {
-      margin: 16px 0;
+    .jewgo-widget__desc {
+      color: #444;
+      font-size: 14px;
+      text-align: center;
+      margin-bottom: 14px;
     }
-    .jewgo-widget__bar {
+    .jewgo-widget__progress-bar {
       width: 100%;
-      height: 8px;
-      background: #f0f0f0;
-      border-radius: 4px;
+      height: 10px;
+      background: #eee;
+      border-radius: 6px;
       overflow: hidden;
+      margin-bottom: 6px;
     }
     .jewgo-widget__bar-fill {
       height: 100%;
-      background: #4CAF50;
-      transition: width 0.3s ease;
+      background: var(--primary-color, #0070f3);
+      transition: width 0.3s;
     }
     .jewgo-widget__stats {
       display: flex;
       justify-content: space-between;
-      margin-top: 8px;
-      font-size: 14px;
+      font-size: 13px;
       color: #666;
+      margin-bottom: 10px;
     }
-    .jewgo-widget__amount {
-      font-weight: 600;
-      color: #333;
+    .jewgo-widget__donations {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 10px;
     }
-    .jewgo-widget__error {
-      color: #d32f2f;
-      padding: 12px;
-      background: #ffebee;
-      border-radius: 4px;
+    .jewgo-widget__donations button {
+      background: var(--primary-color, #0070f3);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
       font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
     }
-    .jewgo-widget__loading {
-      text-align: center;
-      padding: 20px;
-      color: #666;
+    .jewgo-widget__donations button:hover {
+      opacity: 0.85;
+    }
+    .jewgo-widget__payments {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .jewgo-widget__payments a {
+      font-size: 13px;
+      text-decoration: none;
+      color: var(--primary-color, #0070f3);
     }
   `;
 
-  // Inject styles
   function injectStyles() {
     if (!document.getElementById('jewgo-widget-styles')) {
-      const styleEl = document.createElement('style');
-      styleEl.id = 'jewgo-widget-styles';
-      styleEl.textContent = styles;
-      document.head.appendChild(styleEl);
+      const style = document.createElement('style');
+      style.id = 'jewgo-widget-styles';
+      style.textContent = styles;
+      document.head.appendChild(style);
     }
   }
 
-  // Fetch data from Supabase
-  async function fetchFundraiserData() {
-    if (!config.supabaseUrl || !config.supabaseKey) {
-      throw new Error('Supabase URL and API key are required');
-    }
-    if (!config.fundraiserId) {
-      throw new Error('Fundraiser ID is required');
-    }
-
-    const url = `${config.supabaseUrl}/rest/v1/fundraisers?id=eq.${config.fundraiserId}&select=*`;
-    
-    const response = await fetch(url, {
+  async function fetchFundraiser() {
+    const { supabaseUrl, supabaseKey, fundraiserId } = config;
+    const res = await fetch(`${supabaseUrl}/rest/v1/fundraisers?id=eq.${fundraiserId}&select=*`, {
       headers: {
-        'apikey': config.supabaseKey,
-        'Authorization': `Bearer ${config.supabaseKey}`,
-        'Content-Type': 'application/json'
-      }
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch data: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    if (!data || data.length === 0) {
-      throw new Error('Fundraiser not found');
-    }
-
+    const data = await res.json();
     return data[0];
   }
 
-  // Format currency
-  function formatCurrency(amount) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  }
+  function render(container, f) {
+    const goal = f.goal_amount || 0;
+    const percent = 0; // no raised data available
 
-  // Render widget
-  function render(container, data) {
-    const raised = data.amount_raised || 0;
-    const goal = data.goal_amount || 0;
-    const percentage = goal > 0 ? Math.min((raised / goal) * 100, 100) : 0;
 
     container.innerHTML = `
-      <div class="jewgo-widget">
-        <h3 class="jewgo-widget__title">${escapeHtml(data.title || 'Fundraiser')}</h3>
-        ${data.description ? `<p style="margin: 8px 0; color: #666; font-size: 14px;">${escapeHtml(data.description)}</p>` : ''}
-        <div class="jewgo-widget__progress">
-          <div class="jewgo-widget__bar">
-            <div class="jewgo-widget__bar-fill" style="width: ${percentage}%"></div>
-          </div>
-          <div class="jewgo-widget__stats">
-            <span class="jewgo-widget__amount">${formatCurrency(raised)} raised</span>
-            <span>of ${formatCurrency(goal)}</span>
-          </div>
+      <div class="jewgo-widget" style="--primary-color:${f.primary_color}; --font:${f.typography}">
+        ${f.banner_url ? `<img class="jewgo-widget__banner" src="${f.banner_url}" alt="">` : ""}
+        ${f.logo_url ? `<img class="jewgo-widget__logo" src="${f.logo_url}" alt="">` : ""}
+        <h3 class="jewgo-widget__title">${escapeHtml(f.title)}</h3>
+        ${f.description ? `<p class="jewgo-widget__desc">${escapeHtml(f.description)}</p>` : ""}
+        
+        <div class="jewgo-widget__stats">
+          <span>Goal: ${formatCurrency(goal)}</span>
         </div>
+
+
+        ${
+          f.suggested_donations?.length
+            ? `<div class="jewgo-widget__donations">
+              ${f.suggested_donations.map(a => `<button>$${a}</button>`).join('')}
+            </div>`
+            : ""
+        }
+
+        ${
+          f.payment_options?.length
+            ? `<div class="jewgo-widget__payments">
+              ${f.payment_options.map(p => `<a href="#">${p.replace("_", " ")}</a>`).join('')}
+            </div>`
+            : ""
+        }
+
+        ${
+          f.stripe_connect_url
+            ? `<div style="text-align:center;margin-top:10px;">
+                <a href="${f.stripe_connect_url}" target="_blank" style="color:var(--primary-color);font-weight:500;">Donate securely via Stripe</a>
+              </div>`
+            : ""
+        }
       </div>
     `;
   }
 
-  // Show error
-  function renderError(container, message) {
-    container.innerHTML = `
-      <div class="jewgo-widget">
-        <div class="jewgo-widget__error">
-          ${escapeHtml(message)}
-        </div>
-      </div>
-    `;
-  }
-
-  // Show loading
-  function renderLoading(container) {
-    container.innerHTML = `
-      <div class="jewgo-widget">
-        <div class="jewgo-widget__loading">Loading...</div>
-      </div>
-    `;
-  }
-
-  // Escape HTML to prevent XSS
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
   }
 
-  // Initialize widget
+  function formatCurrency(amount) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount);
+  }
+
   async function init() {
     injectStyles();
-
     const container = document.getElementById(config.containerId);
-    if (!container) {
-      console.error(`Widget container #${config.containerId} not found`);
-      return;
-    }
+    if (!container) return;
 
-    renderLoading(container);
-
+    container.innerHTML = `<div class="jewgo-widget__loading">Loading...</div>`;
     try {
-      const data = await fetchFundraiserData();
-      render(container, data);
-    } catch (error) {
-      console.error('Widget error:', error);
-      renderError(container, error.message);
+      const fundraiser = await fetchFundraiser();
+      render(container, fundraiser);
+    } catch (e) {
+      container.innerHTML = `<div class="jewgo-widget__error">${e.message}</div>`;
     }
   }
 
-  // Auto-init when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
 
-  // Expose reload function
-  window.JewgoWidget = {
-    reload: init
-  };
+  window.JewgoWidget = { reload: init };
 })();
