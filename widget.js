@@ -111,10 +111,17 @@
     const { supabaseUrl, supabaseKey, fundraiserId } = config;
     const res = await fetch(`${supabaseUrl}/rest/v1/fundraisers?id=eq.${fundraiserId}&select=*`, {
       headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
       },
     });
+    
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Failed to fetch fundraiser: ${res.status} ${error}`);
+    }
+    
     const data = await res.json();
     return data[0];
   }
